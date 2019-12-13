@@ -5,42 +5,51 @@
 import Event from '../events';
 import EventHandler from '../event-handler';
 import { logger } from '../utils/logger';
+import Hls from '../hls';
+import { MediaAttachingData } from '../types/events';
 
 const { performance } = self;
 
 class FPSController extends EventHandler {
-  constructor (hls) {
+  public timer?: number;
+  public video?: HTMLVideoElement | null;
+  private isVideoPlaybackQualityAvailable: boolean = false;
+  private lastFPSData?: {
+    currentTime: number,
+    droppedFrames: number,
+    decodedFrames: number
+  } 
+  constructor (hls: Hls) {
     super(hls, Event.MEDIA_ATTACHING);
   }
 
   destroy () {
     if (this.timer) {
-      clearInterval(this.timer);
+      self.clearInterval(this.timer);
     }
 
     this.isVideoPlaybackQualityAvailable = false;
   }
 
-  onMediaAttaching (data) {
+  onMediaAttaching (data: MediaAttachingData) {
     const config = this.hls.config;
     if (config.capLevelOnFPSDrop) {
-      const video = this.video = data.media instanceof self.HTMLVideoElement ? data.media : null;
-      if (typeof video.getVideoPlaybackQuality === 'function') {
+      this.video = data.media instanceof self.HTMLVideoElement ? data.media : null;
+      if (this.video && typeof this.video.getVideoPlaybackQuality === 'function') {
         this.isVideoPlaybackQualityAvailable = true;
       }
-
-      clearInterval(this.timer);
-      this.timer = setInterval(this.checkFPSInterval.bind(this), config.fpsDroppedMonitoringPeriod);
+      self.clearInterval(this.timer);
+      this.timer = self.setInterval(this.checkFPSInterval.bind(this), config.fpsDroppedMonitoringPeriod);
     }
   }
 
-  checkFPS (video, decodedFrames, droppedFrames) {
+  checkFPS (decodedFrames: number | undefined, droppedFrames: number | undefined) {
     const currentTime = performance.now();
-    if (decodedFrames) {
-      if (this.lastTime) {
-        const currentPeriod = currentTime - this.lastTime;
-        const currentDropped = droppedFrames - this.lastDroppedFrames;
-        const currentDecoded = decodedFrames - this.lastDecodedFrames;
+    if (decodedFrames && droppedFrames) {
+      if (this.lastFPSData) {
+        const currentPeriod = currentTime - this.lastFPSData.currentTime;
+        const currentDropped = droppedFrames - this.lastFPSData.droppedFrames;
+        const currentDecoded = decodedFrames - this.lastFPSData.decodedFrames;
         const droppedFPS = 1000 * currentDropped / currentPeriod;
         const hls = this.hls;
         hls.trigger(Event.FPS_DROP, { currentDropped: currentDropped, currentDecoded: currentDecoded, totalDroppedFrames: droppedFrames });
@@ -58,20 +67,18 @@ class FPSController extends EventHandler {
           }
         }
       }
-      this.lastTime = currentTime;
-      this.lastDroppedFrames = droppedFrames;
-      this.lastDecodedFrames = decodedFrames;
+      this.lastFPSData = {currentTime, droppedFrames, decodedFrames};
+
     }
   }
 
   checkFPSInterval () {
-    const video = this.video;
-    if (video) {
+    if (this.video) {
       if (this.isVideoPlaybackQualityAvailable) {
-        const videoPlaybackQuality = video.getVideoPlaybackQuality();
-        this.checkFPS(video, videoPlaybackQuality.totalVideoFrames, videoPlaybackQuality.droppedVideoFrames);
+        const videoPlaybackQuality = this.video.getVideoPlaybackQuality();
+        this.checkFPS(videoPlaybackQuality.totalVideoFrames, videoPlaybackQuality.droppedVideoFrames);
       } else {
-        this.checkFPS(video, video.webkitDecodedFrameCount, video.webkitDroppedFrameCount);
+        this.checkFPS((this.video as any).webkitDecodedFrameCount, (this.video as any).webkitDroppedFrameCount);
       }
     }
   }
