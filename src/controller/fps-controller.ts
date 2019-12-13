@@ -20,8 +20,9 @@ class FPSController extends EventHandler {
     droppedFrames: number,
     decodedFrames: number
   }
+
   private streamController?: StreamController;
-  
+
   constructor (hls: Hls) {
     super(hls, Event.MEDIA_ATTACHING);
   }
@@ -69,15 +70,14 @@ class FPSController extends EventHandler {
               currentLevel = currentLevel - 1;
               hls.trigger(Event.FPS_DROP_LEVEL_CAPPING, { level: currentLevel, droppedLevel: hls.currentLevel });
               hls.autoLevelCapping = currentLevel;
-              if(this.streamController) {
+              if (this.streamController) {
                 this.streamController.nextLevelSwitch();
               }
             }
           }
         }
       }
-      this.lastFPSData = {currentTime, droppedFrames, decodedFrames};
-
+      this.lastFPSData = { currentTime, droppedFrames, decodedFrames };
     }
   }
 
