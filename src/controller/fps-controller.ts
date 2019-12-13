@@ -7,6 +7,7 @@ import EventHandler from '../event-handler';
 import { logger } from '../utils/logger';
 import Hls from '../hls';
 import { MediaAttachingData } from '../types/events';
+import StreamController from './stream-controller';
 
 const { performance } = self;
 
@@ -18,9 +19,15 @@ class FPSController extends EventHandler {
     currentTime: number,
     droppedFrames: number,
     decodedFrames: number
-  } 
+  }
+  private streamController?: StreamController;
+  
   constructor (hls: Hls) {
     super(hls, Event.MEDIA_ATTACHING);
+  }
+
+  setStreamController (streamController: StreamController) {
+    this.streamController = streamController;
   }
 
   destroy () {
@@ -62,7 +69,9 @@ class FPSController extends EventHandler {
               currentLevel = currentLevel - 1;
               hls.trigger(Event.FPS_DROP_LEVEL_CAPPING, { level: currentLevel, droppedLevel: hls.currentLevel });
               hls.autoLevelCapping = currentLevel;
-              hls.streamController.nextLevelSwitch();
+              if(this.streamController) {
+                this.streamController.nextLevelSwitch();
+              }
             }
           }
         }
